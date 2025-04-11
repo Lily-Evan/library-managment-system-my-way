@@ -1,0 +1,226 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="container py-5">
+    <div class="row justify-content-center">
+        <div class="col-md-8 text-center">
+            <h1 class="display-4 mb-4">Welcome to the Library Management System</h1>
+            <p class="lead mb-4">Manage your books, track rentals, and discover new titles.</p>
+            
+            <div class="user-unauthenticated">
+                <div class="d-flex justify-content-center gap-3">
+                    <a href="{{ url_for('web_login') }}" class="btn btn-primary btn-lg">Login</a>
+                    <a href="{{ url_for('web_register') }}" class="btn btn-outline-secondary btn-lg">Register</a>
+                </div>
+            </div>
+            
+            <div class="user-authenticated d-none">
+                <a href="{{ url_for('dashboard') }}" class="btn btn-primary btn-lg">Go to Dashboard</a>
+            </div>
+        </div>
+    </div>
+
+    <div class="row mt-5">
+        <div class="col-md-4">
+            <div class="card mb-4">
+                <div class="card-body text-center">
+                    <i class="fas fa-search fa-3x mb-3 text-primary"></i>
+                    <h3>Search Books</h3>
+                    <p>Find books by title, author, or genre in our extensive library collection.</p>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="card mb-4">
+                <div class="card-body text-center">
+                    <i class="fas fa-book fa-3x mb-3 text-primary"></i>
+                    <h3>Rent Books</h3>
+                    <p>Easily check out books and manage your current rentals.</p>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="card mb-4">
+                <div class="card-body text-center">
+                    <i class="fas fa-history fa-3x mb-3 text-primary"></i>
+                    <h3>Track History</h3>
+                    <p>View your rental history and manage returns.</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row mt-3">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header">
+                    <h4>Search Available Books</h4>
+                </div>
+                <div class="card-body">
+                    <div class="input-group mb-3">
+                        <input type="text" id="search-input" class="form-control" placeholder="Search by title or author...">
+                        <button class="btn btn-primary" type="button" id="search-button">
+                            <i class="fas fa-search"></i> Search
+                        </button>
+                    </div>
+                    
+                    <div id="books-container" class="mt-4">
+                        <div class="text-center py-5">
+                            <p class="text-muted">Search for books to see results</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        const searchInput = document.getElementById('search-input');
+        const searchButton = document.getElementById('search-button');
+        const booksContainer = document.getElementById('books-container');
+        
+        // Search books when button is clicked
+        searchButton.addEventListener('click', searchBooks);
+        
+        // Search books when Enter key is pressed
+        searchInput.addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') {
+                searchBooks();
+            }
+        });
+        
+        function searchBooks() {
+            const searchTerm = searchInput.value.trim();
+            
+            if (searchTerm === '') {
+                booksContainer.innerHTML = `
+                    <div class="text-center py-5">
+                        <p class="text-muted">Search for books to see results</p>
+                    </div>
+                `;
+                return;
+            }
+            
+            // Show loading state
+            booksContainer.innerHTML = `
+                <div class="text-center py-5">
+                    <div class="spinner-border text-primary" role="status">
+                        <span class="visually-hidden">Loading...</span>
+                    </div>
+                    <p class="mt-2">Searching books...</p>
+                </div>
+            `;
+            
+            // Fetch books from API
+            fetch(`/api/books?search=${encodeURIComponent(searchTerm)}`)
+                .then(response => response.json())
+                .then(data => {
+                    if (data.books && data.books.length > 0) {
+                        displayBooks(data.books);
+                    } else {
+                        booksContainer.innerHTML = `
+                            <div class="text-center py-5">
+                                <p class="text-muted">No books found matching "${searchTerm}"</p>
+                            </div>
+                        `;
+                    }
+                })
+                .catch(error => {
+                    console.error('Error searching books:', error);
+                    booksContainer.innerHTML = `
+                        <div class="alert alert-danger">
+                            An error occurred while searching for books. Please try again.
+                        </div>
+                    `;
+                });
+        }
+        
+        function displayBooks(books) {
+            let html = `
+                <h5>${books.length} book(s) found:</h5>
+                <div class="row">
+            `;
+            
+            books.forEach(book => {
+                const availabilityClass = book.available > 0 ? 'text-success' : 'text-danger';
+                const availabilityText = book.available > 0 ? 'Available' : 'Not Available';
+                
+                html += `
+                    <div class="col-md-6 col-lg-4 mb-4">
+                        <div class="card h-100">
+                            <div class="card-body">
+                                <h5 class="card-title">${book.title}</h5>
+                                <h6 class="card-subtitle mb-2 text-muted">by ${book.author}</h6>
+                                
+                                <p class="card-text">
+                                    ${book.description ? book.description.substring(0, 100) + '...' : 'No description available'}
+                                </p>
+                                
+                                <div class="d-flex justify-content-between align-items-center mt-3">
+                                    <span class="${availabilityClass}">
+                                        <i class="fas ${book.available > 0 ? 'fa-check-circle' : 'fa-times-circle'}"></i>
+                                        ${availabilityText} (${book.available}/${book.quantity})
+                                    </span>
+                                    
+                                    <button class="btn btn-sm btn-primary rent-book-btn" 
+                                            data-book-id="${book.id}"
+                                            ${book.available <= 0 ? 'disabled' : ''}>
+                                        <i class="fas fa-book"></i> Rent Book
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                `;
+            });
+            
+            html += `</div>`;
+            booksContainer.innerHTML = html;
+            
+            // Add event listeners to rent buttons
+            document.querySelectorAll('.rent-book-btn').forEach(button => {
+                button.addEventListener('click', function() {
+                    const bookId = this.getAttribute('data-book-id');
+                    rentBook(bookId);
+                });
+            });
+        }
+        
+        function rentBook(bookId) {
+            const accessToken = getCookie('access_token');
+            
+            if (!accessToken) {
+                alert('Please log in to rent books');
+                window.location.href = '/login';
+                return;
+            }
+            
+            fetch(`/api/rentals/${bookId}`, {
+                method: 'POST',
+                headers: {
+                    'Authorization': `Bearer ${accessToken}`,
+                    'Content-Type': 'application/json'
+                }
+            })
+            .then(response => {
+                if (response.ok) {
+                    return response.json();
+                }
+                return response.json().then(err => { throw new Error(err.msg || 'Failed to rent book'); });
+            })
+            .then(data => {
+                alert('Book rented successfully! Go to your dashboard to view your rentals.');
+                // Refresh the book list
+                searchBooks();
+            })
+            .catch(error => {
+                alert(error.message);
+            });
+        }
+    });
+</script>
+{% endblock %}
